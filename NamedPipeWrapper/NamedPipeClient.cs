@@ -1,9 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.IO.Pipes;
-using System.Linq;
-using System.Text;
 using System.Threading;
 using NamedPipeWrapper.IO;
 using NamedPipeWrapper.Native;
@@ -18,11 +15,11 @@ namespace NamedPipeWrapper
     public class NamedPipeClient<TReadWrite> : NamedPipeClient<TReadWrite, TReadWrite> where TReadWrite : class
     {
         /// <summary>
-        /// Constructs a new <c>NamedPipeClient</c> to connect to the <see cref="NamedPipeNamedPipeServer{TReadWrite}"/> specified by <paramref name="pipeName"/>.
+        /// Constructs a new <c>NamedPipeClient</c> to connect to the <see cref="NamedPipeServer{TReadWrite}"/> specified by <paramref name="pipeName"/>.
         /// </summary>
         /// <param name="pipeName">Name of the server's pipe</param>
         /// <param name="serverName">server name default is local.</param>
-        public NamedPipeClient(string pipeName,string serverName=".") : base(pipeName, serverName)
+        public NamedPipeClient(string pipeName, string serverName = ".") : base(pipeName, serverName)
         {
         }
     }
@@ -49,6 +46,11 @@ namespace NamedPipeWrapper
         public event ConnectionMessageEventHandler<TRead, TWrite> ServerMessage;
 
         /// <summary>
+        /// Invoked when the client connects to the server.
+        /// </summary>
+        public event ConnectionEventHandler<TRead, TWrite> Connected;
+
+        /// <summary>
         /// Invoked when the client disconnects from the server (e.g., the pipe is closed or broken).
         /// </summary>
         public event ConnectionEventHandler<TRead, TWrite> Disconnected;
@@ -71,11 +73,11 @@ namespace NamedPipeWrapper
         private string _serverName { get; set; }
 
         /// <summary>
-        /// Constructs a new <c>NamedPipeClient</c> to connect to the <see cref="NamedPipeServer{TRead, TWrite}"/> specified by <paramref name="pipeName"/>.
+        /// Constructs a new <c>NamedPipeClient</c> to connect to the <see cref="NamedPipeServer{TReadWrite}"/> specified by <paramref name="pipeName"/>.
         /// </summary>
         /// <param name="pipeName">Name of the server's pipe</param>
         /// <param name="serverName">the Name of the server, default is  local machine</param>
-        public NamedPipeClient(string pipeName,string serverName)
+        public NamedPipeClient(string pipeName, string serverName)
         {
             _pipeName = pipeName;
             _serverName = serverName;
@@ -95,13 +97,33 @@ namespace NamedPipeWrapper
         }
 
         /// <summary>
+        /// Connects to the named pipe server synchronously.
+        /// </summary>
+        /// <returns></returns>
+        public void StartSynchronously()
+        {
+            _closedExplicitly = false;
+            try
+            {
+                ListenSync();
+            }
+            catch (Exception e)
+            {
+                OnError(e);
+            }
+        }
+
+        /// <summary>
         ///     Sends a message to the server over a named pipe.
         /// </summary>
         /// <param name="message">Message to send to the server.</param>
-        public void PushMessage(TWrite message)
+        /// <returns>false if conection is null</returns>
+        public bool PushMessage(TWrite message)
         {
-            if (_connection != null)
-                _connection.PushMessage(message);
+            if (_connection == null) return false;
+
+            _connection.PushMessage(message);
+            return true;
         }
 
         /// <summary>
@@ -115,35 +137,62 @@ namespace NamedPipeWrapper
         }
 
         #region Wait for connection/disconnection
-
-        public void WaitForConnection()
+        /// <summary>
+        /// Wait for connection
+        /// </summary>
+        /// <returns>true if connected</returns>
+        public bool WaitForConnection()
         {
-            _connected.WaitOne();
+            return _connected.WaitOne();
         }
 
-        public void WaitForConnection(int millisecondsTimeout)
+        /// <summary>
+        /// Wait for connection
+        /// </summary>
+        /// <param name="millisecondsTimeout"></param>
+        /// <returns>true if connected</returns>
+        public bool WaitForConnection(int millisecondsTimeout)
         {
-            _connected.WaitOne(millisecondsTimeout);
+            return _connected.WaitOne(millisecondsTimeout);
         }
 
-        public void WaitForConnection(TimeSpan timeout)
+        /// <summary>
+        /// Wait for connection
+        /// </summary>
+        /// <param name="timeout"></param>
+        /// <returns>true if connected</returns>
+        public bool WaitForConnection(TimeSpan timeout)
         {
-            _connected.WaitOne(timeout);
+            return _connected.WaitOne(timeout);
         }
 
-        public void WaitForDisconnection()
+        /// <summary>
+        /// Wait for disconnection
+        /// </summary>
+        /// <returns>true if disconnected</returns>
+        public bool WaitForDisconnection()
         {
-            _disconnected.WaitOne();
+            return _disconnected.WaitOne();
         }
 
-        public void WaitForDisconnection(int millisecondsTimeout)
+        /// <summary>
+        /// Wait for disconnection
+        /// </summary>
+        /// <param name="millisecondsTimeout"></param>
+        /// <returns>true if disconnected</returns>
+        public bool WaitForDisconnection(int millisecondsTimeout)
         {
-            _disconnected.WaitOne(millisecondsTimeout);
+            return _disconnected.WaitOne(millisecondsTimeout);
         }
 
-        public void WaitForDisconnection(TimeSpan timeout)
+        /// <summary>
+        /// Wait for disconnection
+        /// </summary>
+        /// <param name="timeout"></param>
+        /// <returns>true if disconnected</returns>
+        public bool WaitForDisconnection(TimeSpan timeout)
         {
-            _disconnected.WaitOne(timeout);
+            return _disconnected.WaitOne(timeout);
         }
 
         #endregion
@@ -153,12 +202,12 @@ namespace NamedPipeWrapper
         private void ListenSync()
         {
             // Get the name of the data pipe that should be used from now on by this NamedPipeClient
-            var handshake = PipeClientFactory.Connect<string, string>(_pipeName,_serverName);
+            var handshake = PipeClientFactory.Connect<string, string>(_pipeName, _serverName);
             var dataPipeName = handshake.ReadObject();
             handshake.Close();
 
             // Connect to the actual data pipe
-            var dataPipe = PipeClientFactory.CreateAndConnectPipe(dataPipeName,_serverName);
+            var dataPipe = PipeClientFactory.CreateAndConnectPipe(dataPipeName, _serverName);
 
             // Create a Connection object for the data pipe
             _connection = ConnectionFactory.CreateConnection<TRead, TWrite>(dataPipe);
@@ -168,6 +217,9 @@ namespace NamedPipeWrapper
             _connection.Open();
 
             _connected.Set();
+
+            if (Connected != null)
+                Connected(_connection);
         }
 
         private void OnDisconnected(NamedPipeConnection<TRead, TWrite> connection)
@@ -211,11 +263,11 @@ namespace NamedPipeWrapper
 
     static class PipeClientFactory
     {
-        public static PipeStreamWrapper<TRead, TWrite> Connect<TRead, TWrite>(string pipeName,string serverName)
+        public static PipeStreamWrapper<TRead, TWrite> Connect<TRead, TWrite>(string pipeName, string serverName)
             where TRead : class
             where TWrite : class
         {
-            return new PipeStreamWrapper<TRead, TWrite>(CreateAndConnectPipe(pipeName,serverName));
+            return new PipeStreamWrapper<TRead, TWrite>(CreateAndConnectPipe(pipeName, serverName));
         }
 
         public static NamedPipeClientStream CreateAndConnectPipe(string pipeName, string serverName)
@@ -225,7 +277,7 @@ namespace NamedPipeWrapper
             return pipe;
         }
 
-        private static NamedPipeClientStream CreatePipe(string pipeName,string serverName)
+        private static NamedPipeClientStream CreatePipe(string pipeName, string serverName)
         {
             return new NamedPipeClientStream(serverName, pipeName, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.WriteThrough);
         }
