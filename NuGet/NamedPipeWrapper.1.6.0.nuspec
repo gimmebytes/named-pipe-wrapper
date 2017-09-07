@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+    <metadata>
+        <id>NamedPipeWrapper</id>
+        <version>1.6.0</version>
+        <authors>Marvin Kruse</authors>
+        <projectUrl>https://github.com/gimmebytes/named-pipe-wrapper</projectUrl>
+        <requireLicenseAcceptance>false</requireLicenseAcceptance>
+        <description>Wrapper library for Windows Named Pipes in C# / .NET 4.0 / VS 2010</description>
+    </metadata>
+    <files>
+        <file src="..\NamedPipeWrapper\bin\Release\NamedPipeWrapper.dll" target="lib\NamedPipeWrapper.dll" />
+        <file src="..\NamedPipeWrapper\bin\Release\NamedPipeWrapper.pdb" target="lib\NamedPipeWrapper.pdb" />
+    </files>
+</package>
